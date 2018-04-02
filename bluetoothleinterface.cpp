@@ -77,7 +77,8 @@ void BluetoothLEInterface::addDevice(const QBluetoothDeviceInfo &device)
 
 void BluetoothLEInterface::serviceDiscovered(const QBluetoothUuid &gatt)
 {
-    qDebug() << "Service discovered:";
+    qDebug() << "Service discovered:" << gatt.toString();
+
     if (gatt == QBluetoothUuid(UUID_SERVICE_BIP_AUTH)) {
         qDebug() << "Creating service object";
         m_service = m_control->createServiceObject(QBluetoothUuid(UUID_SERVICE_BIP_AUTH), this);
@@ -186,6 +187,11 @@ void BluetoothLEInterface::characteristicRead(const QLowEnergyCharacteristic &ch
     qDebug() << "Read:" << characteristic.uuid() << "(" << characteristic.name() << "):" << value;
 }
 
+void BluetoothLEInterface::characteristicWritten(const QLowEnergyCharacteristic &characteristic, const QByteArray &value)
+{
+    qDebug() << "Written:" << characteristic.uuid() << "(" << characteristic.name() << "):" << value;
+}
+
 void BluetoothLEInterface::infoServiceStateChanged(QLowEnergyService::ServiceState s)
 {
     switch (s) {
@@ -200,15 +206,15 @@ void BluetoothLEInterface::infoServiceStateChanged(QLowEnergyService::ServiceSta
             qDebug() << "Characteristic:" << c.uuid() << c.name();
         }
 
-        QLowEnergyCharacteristic c = m_infoService->characteristic(QBluetoothUuid(UUID_INFO_SERIAL_NO));
+        QLowEnergyCharacteristic c = m_infoService->characteristic(QBluetoothUuid(UUID_CHARACTERISTIC_INFO_SERIAL_NO));
         m_infoService->readCharacteristic(c);
-        c = m_infoService->characteristic(QBluetoothUuid(UUID_INFO_HARDWARE_REV));
+        c = m_infoService->characteristic(QBluetoothUuid(UUID_CHARACTERISTIC_INFO_HARDWARE_REV));
         m_infoService->readCharacteristic(c);
-        c = m_infoService->characteristic(QBluetoothUuid(UUID_INFO_SOFTWARE_REV));
+        c = m_infoService->characteristic(QBluetoothUuid(UUID_CHARACTERISTIC_INFO_SOFTWARE_REV));
         m_infoService->readCharacteristic(c);
-        c = m_infoService->characteristic(QBluetoothUuid(UUID_INFO_SYSTEM_ID));
+        c = m_infoService->characteristic(QBluetoothUuid(UUID_CHARACTERISTIC_INFO_SYSTEM_ID));
         m_infoService->readCharacteristic(c);
-        c = m_infoService->characteristic(QBluetoothUuid(UUID_INFO_PNP_ID));
+        c = m_infoService->characteristic(QBluetoothUuid(UUID_CHARACTERISTIC_INFO_PNP_ID));
         m_infoService->readCharacteristic(c);
 
         break;
@@ -217,4 +223,54 @@ void BluetoothLEInterface::infoServiceStateChanged(QLowEnergyService::ServiceSta
         //nothing for now
         break;
     }
+}
+
+void BluetoothLEInterface::alertServiceStateChanged(QLowEnergyService::ServiceState s)
+{
+    switch (s) {
+    case QLowEnergyService::DiscoveringServices:
+        qDebug() << "Discovering services...";
+        break;
+    case QLowEnergyService::ServiceDiscovered:
+    {
+        qDebug() << "Service discovered.";
+
+        Q_FOREACH(QLowEnergyCharacteristic c, m_alertService->characteristics()) {
+            qDebug() << "Characteristic:" << c.uuid() << c.name();
+        }
+
+        QLowEnergyCharacteristic control = m_alertService->characteristic(QBluetoothUuid(UUID_CHARACTERISTIC_ALERT_CONTROL));
+        m_alertService->writeCharacteristic(control, QByteArray::fromHex("0000"));
+
+        QLowEnergyCharacteristic c = m_alertService->characteristic(QBluetoothUuid(UUID_CHARACTERISTIC_NEW_ALERT));
+        m_alertService->writeCharacteristic(c, QByteArray::fromHex("01") + QByteArray::fromHex("01") + "TEST\nThis is a long message hope it displays ok");
+
+        break;
+    }
+    default:
+        //nothing for now
+        break;
+    }
+}
+
+void BluetoothLEInterface::sendMessage()
+{
+    m_alertService = m_control->createServiceObject(QBluetoothUuid(UUID_SERVICE_ALERT_NOTIFICATION), this);
+    if (m_alertService) {
+        qDebug() << m_alertService->serviceName();
+
+        connect(m_alertService, &QLowEnergyService::stateChanged, this, &BluetoothLEInterface::alertServiceStateChanged);
+        connect(m_alertService, &QLowEnergyService::characteristicRead, this, &BluetoothLEInterface::characteristicRead);
+        connect(m_alertService, &QLowEnergyService::characteristicWritten, this, &BluetoothLEInterface::characteristicWritten);
+        //connect(m_alertService, &QLowEnergyService::error, this, &BluetoothLEInterface::error);
+
+        m_alertService->discoverDetails();
+    } else {
+        qDebug() << "Service not found";
+    }
+}
+
+void BluetoothLEInterface::error(QLowEnergyService::ServiceError newError)
+{
+    qDebug() << "Error" << newError;
 }

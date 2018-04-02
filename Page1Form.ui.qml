@@ -26,6 +26,12 @@ Page {
             LEInterface.requestDeviceInfo();
         }
     }
+    Button {
+        text: "Send Message"
+        onClicked: {
+            LEInterface.sendMessage();
+        }
+    }
     }
 
 }
